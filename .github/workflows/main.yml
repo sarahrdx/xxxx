@@ -1,41 +1,39 @@
-name: Setup Ngrok and Remote Desktop (Final Stable)
+name: Setup ngrok and Remote Desktop
 
 on:
   workflow_dispatch:  # Manual trigger only
 
 jobs:
-  setup-ngrok-rdp:
+  setup-ngrok:
     runs-on: windows-latest
-    timeout-minutes: 360  # 6 hours
+    timeout-minutes: 360  # Max allowed: 6 hours
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-      - name: Download Ngrok (with retry)
+      - name: Download ngrok (with retry)
         run: |
-          $retries = 5
-          while ($retries -gt 0) {
+          $retry = 3
+          while ($retry -gt 0) {
             try {
-              Invoke-WebRequest "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip" -OutFile ngrok.zip -UseBasicParsing
-              if (Test-Path "ngrok.zip") { break }
+              Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip -UseBasicParsing
+              if (Test-Path ngrok.zip) { break }
             } catch {
-              Write-Host "Retrying... $retries left"
+              Write-Host "Retrying download... ($retry left)"
             }
             Start-Sleep -Seconds 5
-            $retries--
+            $retry--
           }
-          if (!(Test-Path "ngrok.zip")) { throw "❌ Failed to download ngrok!" }
-
-      - name: Extract Ngrok
+          if (!(Test-Path ngrok.zip)) { throw "❌ Failed to download ngrok after retries." }
+      - name: Extract ngrok
         run: |
           Expand-Archive ngrok.zip -DestinationPath .
-          if (!(Test-Path ".\ngrok.exe")) { throw "❌ Extraction failed!" }
-
-      - name: Update Ngrok
+          if (!(Test-Path .\ngrok.exe)) { throw "❌ Failed to extract ngrok." }
+      - name: Update ngrok
         run: .\ngrok.exe update
 
-      - name: Authenticate Ngrok
+      - name: Authenticate ngrok
         run: .\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
         env:
           NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
@@ -45,52 +43,35 @@ jobs:
           Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" -Name "UserAuthentication" -Value 1
-
       - name: Set Password for runneradmin
         run: |
           $user = Get-LocalUser -Name "runneradmin"
           if ($user.Enabled -eq $false) { Enable-LocalUser -Name "runneradmin" }
           $secPass = ConvertTo-SecureString "P@ssw0rd!" -AsPlainText -Force
           Set-LocalUser -Name "runneradmin" -Password $secPass
-
-      - name: Start Ngrok TCP Tunnel
+      - name: Start ngrok TCP tunnel (RDP port)
         run: |
-          Start-Process -FilePath .\ngrok.exe -ArgumentList "tcp 3389 --log=ngrok.log --log-format=logfmt --log-level=debug --inspect=true" -WindowStyle Hidden
-          Start-Sleep -Seconds 15
-
-      - name: Fetch Ngrok Tunnel Info
+          Start-Process -FilePath .\ngrok.exe -ArgumentList "tcp 3389" -WindowStyle Hidden
+          Start-Sleep -Seconds 10
+          Get-Content ngrok.log -ErrorAction SilentlyContinue
+      - name: Display connection info
         run: |
-          $retries = 15
-          while ($retries -gt 0) {
-            try {
-              $response = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels"
-              $tcp = ($response.tunnels | Where-Object { $_.proto -eq "tcp" }).public_url
-              if ($tcp) {
-                $host,$port = $tcp -replace "tcp://","" -split ":"
-                Write-Output "✅ RDP Connection Details:"
-                Write-Output "Host: $host"
-                Write-Output "Port: $port"
-                Write-Output "Username: runneradmin"
-                Write-Output "Password: P@ssw0rd!"
-                break
-              }
-            } catch { }
-            Write-Host "⏳ Retrying fetch... ($retries left)"
-            Start-Sleep -Seconds 6
-            $retries--
+          $apiUrl = "http://127.0.0.1:4040/api/tunnels"
+          try {
+            $response = Invoke-RestMethod -Uri $apiUrl
+            $tcpAddr = ($response.tunnels | Where-Object { $_.proto -eq "tcp" }).public_url
+            if ($tcpAddr) {
+              Write-Output "✅ Connect using: $tcpAddr"
+            } else {
+              Write-Output "⚠️ Unable to fetch tunnel info yet."
+            }
+          } catch {
+            Write-Output "⚠️ Ngrok API not responding."
           }
-          if (-not $tcp) { Write-Host "⚠️ Could not fetch tunnel info, check ngrok.log artifact." }
-
-      - name: Upload Ngrok Logs
-        uses: actions/upload-artifact@v4
-        with:
-          name: ngrok-logs
-          path: ngrok.log
-
       - name: Keep Alive (6 hours)
         run: |
           for ($i = 0; $i -lt 72; $i++) {
-            Write-Host "⏳ Workflow alive... Minute: $($i*5)"
+            Write-Host "⏳ Still alive... Hour: $($i * 5) minutes"
             Start-Sleep -Seconds 300
           }
         continue-on-error: true
