@@ -1,12 +1,12 @@
-name: Setup Ngrok and Remote Desktop (Final Optimized)
+name: Setup Ngrok and Remote Desktop (Final Stable)
 
 on:
-  workflow_dispatch:  # Manual trigger
+  workflow_dispatch:  # Manual trigger only
 
 jobs:
   setup-ngrok-rdp:
     runs-on: windows-latest
-    timeout-minutes: 360  # Max allowed: 6 hours
+    timeout-minutes: 360  # 6 hours
 
     steps:
       - name: Checkout Repository
@@ -46,18 +46,11 @@ jobs:
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" -Name "UserAuthentication" -Value 1
 
-      - name: Generate Random Password
-        id: genpass
-        run: |
-          Add-Type -AssemblyName System.Web
-          $pass = [System.Web.Security.Membership]::GeneratePassword(12,2)
-          Write-Output "PASSWORD=$pass" | Out-File -FilePath $env:GITHUB_ENV -Append
-
       - name: Set Password for runneradmin
         run: |
           $user = Get-LocalUser -Name "runneradmin"
           if ($user.Enabled -eq $false) { Enable-LocalUser -Name "runneradmin" }
-          $secPass = ConvertTo-SecureString $Env:PASSWORD -AsPlainText -Force
+          $secPass = ConvertTo-SecureString "P@ssw0rd!" -AsPlainText -Force
           Set-LocalUser -Name "runneradmin" -Password $secPass
 
       - name: Start Ngrok TCP Tunnel
@@ -78,7 +71,7 @@ jobs:
                 Write-Output "Host: $host"
                 Write-Output "Port: $port"
                 Write-Output "Username: runneradmin"
-                Write-Output "Password: $Env:PASSWORD"
+                Write-Output "Password: P@ssw0rd!"
                 break
               }
             } catch { }
