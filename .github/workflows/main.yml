@@ -1,4 +1,4 @@
-name: Setup Ngrok and Remote Desktop (Maximized)
+name: Setup Ngrok and Remote Desktop (Final Optimized)
 
 on:
   workflow_dispatch:  # Manual trigger
@@ -6,11 +6,11 @@ on:
 jobs:
   setup-ngrok-rdp:
     runs-on: windows-latest
-    timeout-minutes: 360  # 6 hours
+    timeout-minutes: 360  # Max allowed: 6 hours
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Download Ngrok (with retry)
         run: |
@@ -74,7 +74,7 @@ jobs:
               $tcp = ($response.tunnels | Where-Object { $_.proto -eq "tcp" }).public_url
               if ($tcp) {
                 $host,$port = $tcp -replace "tcp://","" -split ":"
-                Write-Output "✅ RDP Info"
+                Write-Output "✅ RDP Connection Details:"
                 Write-Output "Host: $host"
                 Write-Output "Port: $port"
                 Write-Output "Username: runneradmin"
@@ -89,7 +89,7 @@ jobs:
           if (-not $tcp) { Write-Host "⚠️ Could not fetch tunnel info." }
 
       - name: Upload Ngrok Logs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ngrok-logs
           path: ngrok.log
