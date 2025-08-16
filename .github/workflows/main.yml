@@ -55,12 +55,12 @@ jobs:
 
       - name: Start Ngrok TCP Tunnel
         run: |
-          Start-Process -FilePath .\ngrok.exe -ArgumentList "tcp 3389 --log=ngrok.log" -WindowStyle Hidden
+          Start-Process -FilePath .\ngrok.exe -ArgumentList "tcp 3389 --log=ngrok.log --log-format=logfmt --log-level=debug --inspect=true" -WindowStyle Hidden
           Start-Sleep -Seconds 15
 
       - name: Fetch Ngrok Tunnel Info
         run: |
-          $retries = 10
+          $retries = 15
           while ($retries -gt 0) {
             try {
               $response = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels"
@@ -79,7 +79,7 @@ jobs:
             Start-Sleep -Seconds 6
             $retries--
           }
-          if (-not $tcp) { Write-Host "⚠️ Could not fetch tunnel info." }
+          if (-not $tcp) { Write-Host "⚠️ Could not fetch tunnel info, check ngrok.log artifact." }
 
       - name: Upload Ngrok Logs
         uses: actions/upload-artifact@v4
